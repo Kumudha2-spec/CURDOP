@@ -4,6 +4,7 @@ import { Version } from '@microsoft/sp-core-library';
 import {
   type IPropertyPaneConfiguration,
   PropertyPaneTextField,
+  PropertyPaneCheckbox,
   PropertyPaneSlider,
 } from '@microsoft/sp-property-pane';
 import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
@@ -15,24 +16,34 @@ import { ICurdOperationsSpfxProps } from './components/ICurdOperationsSpfxProps'
 
 export interface ICurdOperationsSpfxWebPartProps {
   description: string;
-  sliderValue: number;
+  listName: string;
+  defaultRating: number;
+  showRating: boolean;
+  allowAnonymous: boolean;
 }
 
-export default class CurdOperationsSpfxWebPart extends BaseClientSideWebPart<ICurdOperationsSpfxWebPartProps> {
+export default class CurdOperationsSpfxWebPart
+  extends BaseClientSideWebPart<ICurdOperationsSpfxWebPartProps> {
 
   private _isDarkTheme: boolean = false;
   private _environmentMessage: string = '';
 
   public render(): void {
-    const element: React.ReactElement<ICurdOperationsSpfxProps> = React.createElement(
-      CurdOperationsSpfx,
-      {
-        description: this.properties.description,
-        isDarkTheme: this._isDarkTheme,
-        environmentMessage: this._environmentMessage,
-        userDisplayName: this.context.pageContext.user.displayName
-      }
-    );
+    const element: React.ReactElement<ICurdOperationsSpfxProps> =
+      React.createElement(
+        CurdOperationsSpfx,
+        {
+          description: this.properties.description || 'Employee Feedback',
+          listName: this.properties.listName || 'EmployeeFeedback',
+          defaultRating: this.properties.defaultRating || 3,
+          showRating: this.properties.showRating !== false,
+          allowAnonymous: this.properties.allowAnonymous || false,
+          isDarkTheme: this._isDarkTheme,
+          environmentMessage: this._environmentMessage,
+          userDisplayName: this.context.pageContext.user.displayName,
+          context: this.context
+        }
+      );
 
     ReactDom.render(element, this.domElement);
   }
@@ -43,24 +54,32 @@ export default class CurdOperationsSpfxWebPart extends BaseClientSideWebPart<ICu
     });
   }
 
-
-
   private _getEnvironmentMessage(): Promise<string> {
-    if (!!this.context.sdks.microsoftTeams) { // running in Teams, office.com or Outlook
+    if (!!this.context.sdks.microsoftTeams) {
       return this.context.sdks.microsoftTeams.teamsJs.app.getContext()
         .then(context => {
           let environmentMessage: string = '';
+
           switch (context.app.host.name) {
-            case 'Office': // running in Office
-              environmentMessage = this.context.isServedFromLocalhost ? strings.AppLocalEnvironmentOffice : strings.AppOfficeEnvironment;
+            case 'Office':
+              environmentMessage = this.context.isServedFromLocalhost
+                ? strings.AppLocalEnvironmentOffice
+                : strings.AppOfficeEnvironment;
               break;
-            case 'Outlook': // running in Outlook
-              environmentMessage = this.context.isServedFromLocalhost ? strings.AppLocalEnvironmentOutlook : strings.AppOutlookEnvironment;
+
+            case 'Outlook':
+              environmentMessage = this.context.isServedFromLocalhost
+                ? strings.AppLocalEnvironmentOutlook
+                : strings.AppOutlookEnvironment;
               break;
-            case 'Teams': // running in Teams
+
+            case 'Teams':
             case 'TeamsModern':
-              environmentMessage = this.context.isServedFromLocalhost ? strings.AppLocalEnvironmentTeams : strings.AppTeamsTabEnvironment;
+              environmentMessage = this.context.isServedFromLocalhost
+                ? strings.AppLocalEnvironmentTeams
+                : strings.AppTeamsTabEnvironment;
               break;
+
             default:
               environmentMessage = strings.UnknownEnvironment;
           }
@@ -69,25 +88,40 @@ export default class CurdOperationsSpfxWebPart extends BaseClientSideWebPart<ICu
         });
     }
 
-    return Promise.resolve(this.context.isServedFromLocalhost ? strings.AppLocalEnvironmentSharePoint : strings.AppSharePointEnvironment);
+    return Promise.resolve(
+      this.context.isServedFromLocalhost
+        ? strings.AppLocalEnvironmentSharePoint
+        : strings.AppSharePointEnvironment
+    );
   }
 
-  protected onThemeChanged(currentTheme: IReadonlyTheme | undefined): void {
+  protected onThemeChanged(
+    currentTheme: IReadonlyTheme | undefined
+  ): void {
     if (!currentTheme) {
       return;
     }
 
     this._isDarkTheme = !!currentTheme.isInverted;
-    const {
-      semanticColors
-    } = currentTheme;
+
+    const { semanticColors } = currentTheme;
 
     if (semanticColors) {
-      this.domElement.style.setProperty('--bodyText', semanticColors.bodyText || null);
-      this.domElement.style.setProperty('--link', semanticColors.link || null);
-      this.domElement.style.setProperty('--linkHovered', semanticColors.linkHovered || null);
-    }
+      this.domElement.style.setProperty(
+        '--bodyText',
+        semanticColors.bodyText || null
+      );
 
+      this.domElement.style.setProperty(
+        '--link',
+        semanticColors.link || null
+      );
+
+      this.domElement.style.setProperty(
+        '--linkHovered',
+        semanticColors.linkHovered || null
+      );
+    }
   }
 
   protected onDispose(): void {
@@ -103,19 +137,40 @@ export default class CurdOperationsSpfxWebPart extends BaseClientSideWebPart<ICu
       pages: [
         {
           header: {
-            description: strings.PropertyPaneDescription
+            description: 'Employee Feedback Form Configuration'
           },
+
           groups: [
             {
-              groupName: strings.BasicGroupName,
+              groupName: 'Form Settings',
+
               groupFields: [
+                // Form Title / Heading
                 PropertyPaneTextField('description', {
-                  label: strings.DescriptionFieldLabel
+                  label: 'Form Heading'
                 }),
-                PropertyPaneSlider('sliderValue', {
-                  label: 'No of Continents',
-                  min: 0,
-                  max: 7,
+
+                // Target SharePoint List
+                PropertyPaneTextField('listName', {
+                  label: 'Target SharePoint List Name'
+                }),
+
+                // Default Star/Number Rating slider
+                PropertyPaneSlider('defaultRating', {
+                  label: 'Default Rating (1 to 5)',
+                  min: 1,
+                  max: 5,
+                  step: 1
+                }),
+
+                // Toggle visibility of the Rating section
+                PropertyPaneCheckbox('showRating', {
+                  text: 'Enable Rating Scale'
+                }),
+
+                // Allow anonymous submissions (hides name & email)
+                PropertyPaneCheckbox('allowAnonymous', {
+                  text: 'Allow Anonymous Submissions'
                 })
               ]
             }
